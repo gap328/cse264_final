@@ -1,9 +1,15 @@
 // server/app.js
+import dotenv from "dotenv";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+dotenv.config({ path: join(__dirname, "..", ".env") });
+
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
-
-dotenv.config();
+import session from "express-session";
 
 // ROUTES
 import usersRoutes from "./routes/users.js";
@@ -14,8 +20,28 @@ import shoppinglistRoutes from "./routes/shoppinglist.js";
 const app = express();
 
 // MIDDLEWARE
-app.use(cors());
+app.use(
+  cors({
+    origin: ["http://localhost:3000", "http://localhost:3002", "http://localhost:3001"],
+    credentials: true,
+  })
+);
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// SESSION CONFIGURATION (wrap in try/catch to avoid blocking)
+try {
+  app.use(
+    session({
+      secret: process.env.SESSION_SECRET || "dev-secret",
+      resave: false,
+      saveUninitialized: false,
+      cookie: { maxAge: 1000 * 60 * 60 * 24, httpOnly: true, secure: false },
+    })
+  );
+} catch (err) {
+  console.warn("Session middleware failed:", err.message);
+}
 
 // ROUTE MOUNTING
 app.use("/api/users", usersRoutes);
@@ -25,10 +51,11 @@ app.use("/api/shoppinglist", shoppinglistRoutes);
 
 // ROOT TEST
 app.get("/", (req, res) => {
-  res.send("Meal Planner API running!");
+  res.send("Smart Recipe Meal Planner API running!");
 });
 
 // START SERVER
-app.listen(3001, () => {
-  console.log("Server running on http://localhost:3001");
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });

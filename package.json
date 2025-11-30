@@ -1,26 +1,34 @@
 {
   "name": "cse-264-final-project",
   "version": "1.0.0",
-  "description": "Recipe meal plannerr",
-  "main": "index.js",
+  "description": "Smart Recipe Meal Planner - CSE264 Final Project",
+  "main": "server/app.js",
+  "type": "module",
   "scripts": {
+    "start": "node server/app.js",
+    "dev": "nodemon server/app.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mmc327/Cse-264-Final-Project.git"
+    "url": "git+https://github.com/gap328/cse264_final.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/mmc327/Cse-264-Final-Project/issues"
+    "url": "https://github.com/gap328/cse264_final/issues"
   },
-  "homepage": "https://github.com/mmc327/Cse-264-Final-Project#readme",
+  "homepage": "https://github.com/gap328/cse264_final#readme",
   "dependencies": {
+    "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
+    "dotenv": "^16.3.1",
     "express": "^5.1.0",
+    "express-session": "^1.17.3",
     "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
   }
 }
