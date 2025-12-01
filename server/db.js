@@ -1,37 +1,33 @@
 // server/db.js
 import pg from "pg";
-import dotenv from "dotenv";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Load .env from project root
-dotenv.config({ path: join(__dirname, "..", ".env") });
 
 const { Pool } = pg;
 
-// Create a pool but do not block startup
+// No env
 const pool = new Pool({
-  host: process.env.DB_HOST || "localhost",
-  port: process.env.DB_PORT || 5432,
-  database: process.env.DB_NAME || "recipe_planner",
-  user: process.env.DB_USER || "gabrielpetertonjes",
-  password: process.env.DB_PASSWORD || "",
+  host: "localhost",
+  port: 5432,
+  database: "recipe_planner",  //postgres
+  user: "postgres",
+  password: "Titans1042", // <-- change password to your local password (Use the SAME password you use when you run `psql -U postgres`)
 });
 
-// Test connection safely
+// Debug what we're actually passing in
+console.log("DB CONFIG USED BY Pool:", {
+  host: "localhost",
+  port: 5432,
+  database: "recipe_planner",
+  user: "postgres",
+  passwordType: typeof "YOUR_POSTGRES_PASSWORD_HERE",
+});
+
 (async () => {
   try {
     const client = await pool.connect();
-    console.log("Database connected successfully");
+    console.log("Connected to PostgreSQL as postgres");
     client.release();
   } catch (err) {
-    console.warn(
-      "Database connection failed (server will still start):",
-      err.message
-    );
+    console.error("Database connection failed (hardcoded):", err.message);
   }
 })();
 
