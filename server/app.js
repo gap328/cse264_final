@@ -1,15 +1,17 @@
-// server/app.js
-import dotenv from "dotenv";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+dotenv.config();
+console.log("Loaded Spoon Key:", process.env.SPOONACULAR_API_KEY);
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-dotenv.config({ path: join(__dirname, "..", ".env") });
-
+// ---------------------
+// IMPORTS
+// ---------------------
 import express from "express";
 import cors from "cors";
+import dotenv from "dotenv";
 import session from "express-session";
+import pgSession from "connect-pg-simple";
+import pool from "./db.js";
+
+dotenv.config();
 
 // ROUTES
 import usersRoutes from "./routes/users.js";
@@ -19,43 +21,59 @@ import shoppinglistRoutes from "./routes/shoppinglist.js";
 
 const app = express();
 
-// MIDDLEWARE
+// ---------------------
+// CORS CONFIG (FINAL WORKING VERSION)
+// ---------------------
 app.use(
   cors({
-    origin: ["http://localhost:3000", "http://localhost:3002", "http://localhost:3001"],
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    exposedHeaders: ["set-cookie"],
     credentials: true,
   })
 );
+
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// SESSION CONFIGURATION (wrap in try/catch to avoid blocking)
-try {
-  app.use(
-    session({
-      secret: process.env.SESSION_SECRET || "dev-secret",
-      resave: false,
-      saveUninitialized: false,
-      cookie: { maxAge: 1000 * 60 * 60 * 24, httpOnly: true, secure: false },
-    })
-  );
-} catch (err) {
-  console.warn("Session middleware failed:", err.message);
+// ---------------------
+// SESSION CONFIG (FINAL WORKING VERSION)
+// ---------------------
+const PgSession = pgSession(session);
+
+app.use(
+  session({
+    store: new PgSession({
+      pool: pool,
+      tableName: "session",
+    }),
+    secret: "keyboard_cat_123",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+  secure: false,
+  httpOnly: true,
+  sameSite: "lax",
+  maxAge: 30 * 24 * 60 * 60 * 1000
 }
+  })
+);
 
-// ROUTE MOUNTING
+// ---------------------
+// ROUTES
+// ---------------------
 app.use("/api/users", usersRoutes);
 app.use("/api/recipes", recipesRoutes);
 app.use("/api/mealplan", mealplanRoutes);
 app.use("/api/shoppinglist", shoppinglistRoutes);
 
-// ROOT TEST
 app.get("/", (req, res) => {
-  res.send("Smart Recipe Meal Planner API running!");
+  res.send("Meal Planner API running!");
 });
 
+// ---------------------
 // START SERVER
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+// ---------------------
+app.listen(3001, () => {
+  console.log("Server running on http://localhost:3001");
 });
