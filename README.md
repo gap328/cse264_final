@@ -1,4 +1,6 @@
-PlatePlan
+README
+🍽️ PlatePlan
+A personalized weekly meal planning app powered by real recipe data and smart ingredient aggregation
 
 OVERVIEW
 PlatePlan simplifies healthy eating by:
