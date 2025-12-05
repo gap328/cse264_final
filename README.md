@@ -1,8 +1,8 @@
-README
-🍽️ PlatePlan
+# README
+# 🍽️ PlatePlan
 A personalized weekly meal planning app powered by real recipe data and smart ingredient aggregation
 
-OVERVIEW
+## OVERVIEW
 PlatePlan simplifies healthy eating by:
 - Letting users choose their diet preferences
 - Generating a full weekly meal plan using real recipe data
@@ -11,49 +11,49 @@ PlatePlan simplifies healthy eating by:
 - Automatically generating a full shopping list
 The app is authenticated with session-based login and stores all information per user
 
-FEATURES
-User Authentication
+## FEATURES
+### User Authentication
 - Signup
 - Login
 - Session tracking with express-session
 - Sessions stored in PostgreSQL
 
-Users Preferences:
+### Users Preferences:
 - Diet type
 - Allergies/intolerances
 - Calorie target
 - Meals per day
 Preferences are used to directly generate meal plans
 
-WEEKLY MEAL PLANS
+## WEEKLY MEAL PLANS
 - Users can replace a single meal
 - Replacement will adhere to diet/allergy preferences
 - Newly fetched recipe is stored in the database
 
-SMART SHOPPING LIST
+## SMART SHOPPING LIST
 - Aggregates ingredients from all meals in the plan
 - Combines duplicate ingredients
 - Returns a clean, sorted, detailed shopping list
 
-FRONTEND UI
+## FRONTEND UI
 - React + Material UI
 - Organized navigation system(Login, Preferences, Dashboard, Shopping list)
 
-TECH STACK
-Frontend
+## TECH STACK
+### Frontend
 - React
 - React Router
 - Material UI
 - Fetch API
-Backend
+### Backend
 - Node.js
 - Express.js
 - express-session
 - connect-pg-simple
 - pg(PostgreSQL client)
-Database
+### Database
 - PostgreSQL
-Key tables:
+### Key tables:
 - users
 - preferences
 - recipes
@@ -62,10 +62,10 @@ Key tables:
 - meal_plans
 - meal_plan_items
 - shopping_list_items
-External API
+### External API
 - Spoonacular API
 
-INSTALLATION & SETUP
+## INSTALLATION & SETUP
 1. Clone the repo: git clone https://github.com/gap328/cse264_final.git
 cd cse264_final
 2. cd server 
@@ -76,7 +76,7 @@ npm install
 npm start
 Runs at http://localhost:3000/
 
-API ENDPOINTS
+## API ENDPOINTS
 Auth
 - POST /api/users/signup
 - POST /api/users/login
@@ -89,12 +89,12 @@ Meal Plans
 Shopping List
 - GET /api/shoppinglist/:planId
 
-Future Improvements
+## FUTURE IMPROVEMENTS
 - Save multiple weekly plans
 - Individual meal nutrition breakdowns
 - Drag and drop meal reaaranging
 
-Team Members
+## TEAM MEMBERS
 Matt: Backend Engineer + Database Architect + Full-Stack Integrator
 Marc: Frontend Engineer + UI/UX Developer
 Gabe: API Developer / Backend Route Engineer
