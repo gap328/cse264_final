@@ -34,17 +34,26 @@ router.post("/generate", requireAuth, async (req, res) => {
     const mealsPerDay = prefs.meals_per_day || 3;
     const totalMeals = 7 * mealsPerDay; // 7 days
 
-    // Build URL with query parameters for Spoonacular
-    const params = new URLSearchParams({
-      apiKey: SPOONACULAR_API_KEY,
-      number: totalMeals,
-      addRecipeInformation: true,
-      fillIngredients: true
-    });
+   const params = new URLSearchParams({
+  apiKey: SPOONACULAR_API_KEY,
+  number: totalMeals,
+  addRecipeInformation: true,
+  fillIngredients: true
+});
 
-    if (prefs.diet_type) params.append('diet', prefs.diet_type);
-    if (prefs.allergies) params.append('intolerances', prefs.allergies);
+if (prefs.diet_type) params.append('diet', prefs.diet_type);
+if (prefs.allergies) params.append('intolerances', prefs.allergies);
 
+// Add calorie filtering with range
+if (prefs.calorie_target) {
+  const target = parseInt(prefs.calorie_target);
+  const mealsPerDay = prefs.meals_per_day || 3;
+  const caloriesPerMeal = Math.floor(target / mealsPerDay);
+  
+  // Set range: +/- 200 calories per meal
+  params.append('minCalories', Math.max(0, caloriesPerMeal - 200));
+  params.append('maxCalories', caloriesPerMeal + 200);
+}
     const response = await fetch(`${SPOONACULAR_BASE_URL}/complexSearch?${params}`);
     
     if (!response.ok) {
@@ -92,6 +101,63 @@ router.post("/generate", requireAuth, async (req, res) => {
         );
 
         const recipeId = recipeResult.rows[0].recipe_id;
+
+        // Fetch full recipe details with ingredients from Spoonacular
+        try {
+          const detailsParams = new URLSearchParams({
+            apiKey: SPOONACULAR_API_KEY,
+            includeNutrition: false
+          });
+
+          const detailsResponse = await fetch(
+            `${SPOONACULAR_BASE_URL}/${apiRecipe.id}/information?${detailsParams}`
+          );
+          
+          if (detailsResponse.ok) {
+            const recipeDetails = await detailsResponse.json();
+
+            // Store ingredients
+            if (recipeDetails.extendedIngredients && recipeDetails.extendedIngredients.length > 0) {
+              for (const ing of recipeDetails.extendedIngredients) {
+                try {
+                  // Insert ingredient if not exists
+                  const ingResult = await pool.query(
+                    `INSERT INTO ingredients (name, category) 
+                     VALUES ($1, $2) 
+                     ON CONFLICT (name) DO NOTHING 
+                     RETURNING ingredient_id`,
+                    [ing.nameClean || ing.name, ing.aisle || 'Other']
+                  );
+
+                  let ingredientId = ingResult.rows[0]?.ingredient_id;
+                  
+                  // If conflict, get existing ingredient_id
+                  if (!ingredientId) {
+                    const existing = await pool.query(
+                      `SELECT ingredient_id FROM ingredients WHERE name = $1`,
+                      [ing.nameClean || ing.name]
+                    );
+                    ingredientId = existing.rows[0]?.ingredient_id;
+                  }
+
+                  // Link to recipe
+                  if (ingredientId) {
+                    await pool.query(
+                      `INSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount, unit)
+                       VALUES ($1, $2, $3, $4)`,
+                      [recipeId, ingredientId, ing.amount || 0, ing.unit || '']
+                    );
+                  }
+                } catch (ingErr) {
+                  console.log(`Error storing ingredient: ${ing.name}`);
+                }
+              }
+              console.log(`✓ Stored ingredients for: ${apiRecipe.title}`);
+            }
+          }
+        } catch (ingError) {
+          console.log(`Could not fetch ingredients for ${apiRecipe.title}`);
+        }
 
         // Insert into meal_plan_items
         const itemResult = await pool.query(
@@ -237,6 +303,59 @@ router.put("/item/:itemId", requireAuth, async (req, res) => {
     );
 
     const newRecipeId = recipeResult.rows[0].recipe_id;
+
+    // Fetch and store ingredients for replacement recipe
+    try {
+      const detailsParams = new URLSearchParams({
+        apiKey: SPOONACULAR_API_KEY,
+        includeNutrition: false
+      });
+
+      const detailsResponse = await fetch(
+        `${SPOONACULAR_BASE_URL}/${newApiRecipe.id}/information?${detailsParams}`
+      );
+      
+      if (detailsResponse.ok) {
+        const recipeDetails = await detailsResponse.json();
+
+        if (recipeDetails.extendedIngredients && recipeDetails.extendedIngredients.length > 0) {
+          for (const ing of recipeDetails.extendedIngredients) {
+            try {
+              const ingResult = await pool.query(
+                `INSERT INTO ingredients (name, category) 
+                 VALUES ($1, $2) 
+                 ON CONFLICT (name) DO NOTHING 
+                 RETURNING ingredient_id`,
+                [ing.nameClean || ing.name, ing.aisle || 'Other']
+              );
+
+              let ingredientId = ingResult.rows[0]?.ingredient_id;
+              
+              if (!ingredientId) {
+                const existing = await pool.query(
+                  `SELECT ingredient_id FROM ingredients WHERE name = $1`,
+                  [ing.nameClean || ing.name]
+                );
+                ingredientId = existing.rows[0]?.ingredient_id;
+              }
+
+              if (ingredientId) {
+                await pool.query(
+                  `INSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount, unit)
+                   VALUES ($1, $2, $3, $4)`,
+                  [newRecipeId, ingredientId, ing.amount || 0, ing.unit || '']
+                );
+              }
+            } catch (ingErr) {
+              console.log(`Error storing ingredient: ${ing.name}`);
+            }
+          }
+          console.log(`✓ Stored ingredients for replacement: ${newApiRecipe.title}`);
+        }
+      }
+    } catch (ingError) {
+      console.log(`Could not fetch ingredients for ${newApiRecipe.title}`);
+    }
 
     // Update the meal plan item
     const updateResult = await pool.query(

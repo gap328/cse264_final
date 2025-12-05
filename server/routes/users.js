@@ -35,10 +35,10 @@ router.post("/signup", async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Insert new user
+    // Insert new user with default free tier
     const result = await pool.query(
-      "INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING user_id, email",
-      [email, hashedPassword]
+      "INSERT INTO users (email, password_hash, role, subscription_tier) VALUES ($1, $2, $3, $4) RETURNING user_id, email, role, subscription_tier",
+      [email, hashedPassword, 'free', 'free']
     );
 
     const newUser = result.rows[0];
@@ -50,7 +50,9 @@ router.post("/signup", async (req, res) => {
       message: 'User created successfully',
       user: {
         user_id: newUser.user_id,
-        email: newUser.email
+        email: newUser.email,
+        role: newUser.role,
+        subscription_tier: newUser.subscription_tier
       }
     });
   } catch (err) {
@@ -94,7 +96,9 @@ router.post("/login", async (req, res) => {
       message: 'Login successful',
       user: {
         user_id: user.user_id,
-        email: user.email
+        email: user.email,
+        role: user.role,
+        subscription_tier: user.subscription_tier
       }
     });
   } catch (err) {
@@ -118,7 +122,7 @@ router.post("/logout", (req, res) => {
 router.get("/me", requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT user_id, email FROM users WHERE user_id = $1",
+      "SELECT user_id, email, role, subscription_tier, subscription_expires_at FROM users WHERE user_id = $1",
       [req.session.userId]
     );
 
@@ -190,6 +194,105 @@ router.post("/preferences", requireAuth, async (req, res) => {
   } catch (err) {
     console.error("Save preferences error:", err);
     res.status(500).json({ error: "Server error saving preferences" });
+  }
+});
+
+// GET USER SUBSCRIPTION INFO
+router.get("/subscription", requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT role, subscription_tier, subscription_expires_at FROM users WHERE user_id = $1",
+      [req.session.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = result.rows[0];
+    const isPaid = user.subscription_tier === 'premium' || user.subscription_tier === 'pro';
+    const isExpired = user.subscription_expires_at && new Date(user.subscription_expires_at) < new Date();
+
+    res.json({
+      role: user.role,
+      subscriptionTier: user.subscription_tier,
+      isPaid: isPaid && !isExpired,
+      expiresAt: user.subscription_expires_at
+    });
+  } catch (err) {
+    console.error("Get subscription error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// UPGRADE TO PREMIUM (Simulated payment)
+router.post("/upgrade", requireAuth, async (req, res) => {
+  const { tier } = req.body; // 'premium' or 'pro'
+
+  if (!['premium', 'pro'].includes(tier)) {
+    return res.status(400).json({ error: 'Invalid subscription tier' });
+  }
+
+  try {
+    // In production, you'd integrate with Stripe/PayPal here
+    const expiresAt = new Date();
+    expiresAt.setMonth(expiresAt.getMonth() + 1); // 1 month subscription
+
+    const result = await pool.query(
+      `UPDATE users 
+       SET subscription_tier = $1, subscription_expires_at = $2
+       WHERE user_id = $3
+       RETURNING user_id, email, subscription_tier, subscription_expires_at`,
+      [tier, expiresAt, req.session.userId]
+    );
+
+    res.json({
+      message: 'Subscription upgraded successfully!',
+      user: result.rows[0]
+    });
+  } catch (err) {
+    console.error("Upgrade error:", err);
+    res.status(500).json({ error: "Failed to upgrade subscription" });
+  }
+});
+
+// ADMIN: Set user role (admin only)
+router.put("/admin/setrole/:userId", requireAuth, async (req, res) => {
+  const { userId } = req.params;
+  const { role } = req.body; // 'free', 'premium', 'admin'
+
+  if (!['free', 'premium', 'pro', 'admin'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role' });
+  }
+
+  try {
+    // Check if current user is admin
+    const adminCheck = await pool.query(
+      "SELECT role FROM users WHERE user_id = $1",
+      [req.session.userId]
+    );
+
+    if (adminCheck.rows.length === 0 || adminCheck.rows[0].role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    // Update target user's role
+    const result = await pool.query(
+      "UPDATE users SET role = $1 WHERE user_id = $2 RETURNING user_id, email, role, subscription_tier",
+      [role, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({
+      message: 'User role updated',
+      user: result.rows[0]
+    });
+  } catch (err) {
+    console.error("Set role error:", err);
+    res.status(500).json({ error: "Failed to update role" });
   }
 });
 

@@ -83,14 +83,18 @@ function Preferences({ user, onLogout }) {
     }
   };
 
+  // FIXED: Updated diet options to match Spoonacular API exactly
   const dietOptions = [
     { value: '', label: 'None' },
     { value: 'vegetarian', label: 'Vegetarian' },
     { value: 'vegan', label: 'Vegan' },
-    { value: 'glutenFree', label: 'Gluten Free' },
+    { value: 'gluten free', label: 'Gluten Free' },  // Changed from glutenFree
     { value: 'ketogenic', label: 'Ketogenic' },
     { value: 'paleo', label: 'Paleo' },
-    { value: 'High Protein', label: 'High Protein' },
+    { value: 'pescetarian', label: 'Pescetarian' },  // Added
+    { value: 'lacto-vegetarian', label: 'Lacto-Vegetarian' },  // Added
+    { value: 'ovo-vegetarian', label: 'Ovo-Vegetarian' },  // Added
+    { value: 'whole30', label: 'Whole30' },  // Added
   ];
 
   return (

@@ -45,12 +45,14 @@ router.get("/:planId", requireAuth, async (req, res) => {
 
     const recipes = itemsResult.rows;
     
-    // Map to store aggregated ingredients
+    // Map to store aggregated ingredients (for "by aisle" view)
     const ingredientsMap = new Map();
+    
+    // Array to store ingredients grouped by recipe (for "by recipe" view)
+    const byRecipe = [];
 
-    // For each recipe, check if we have ingredients stored locally first
+    // For each recipe, get ingredients
     for (const recipe of recipes) {
-      // Check if ingredients exist in YOUR recipe_ingredients table
       const storedIngredients = await pool.query(
         `SELECT i.name, i.category, ri.amount, ri.unit
          FROM recipe_ingredients ri
@@ -60,7 +62,19 @@ router.get("/:planId", requireAuth, async (req, res) => {
       );
 
       if (storedIngredients.rows.length > 0) {
-        // Use stored ingredients
+        // Add to "by recipe" array
+        byRecipe.push({
+          recipeId: recipe.recipe_id,
+          recipeName: recipe.title,
+          ingredients: storedIngredients.rows.map(ing => ({
+            name: ing.name,
+            amount: parseFloat(ing.amount),
+            unit: ing.unit,
+            aisle: ing.category || 'Other'
+          }))
+        });
+
+        // Also aggregate for "by aisle" view
         storedIngredients.rows.forEach(ing => {
           const key = ing.name.toLowerCase();
           if (ingredientsMap.has(key)) {
@@ -80,9 +94,6 @@ router.get("/:planId", requireAuth, async (req, res) => {
           }
         });
       } else {
-        // Fetch from Spoonacular API if not in database
-        // Note: You would need to store the Spoonacular recipe ID to do this
-        // For now, we'll skip recipes without stored ingredients
         console.log(`No ingredients found for recipe: ${recipe.title}`);
       }
     }
@@ -134,7 +145,8 @@ router.get("/:planId", requireAuth, async (req, res) => {
 
     res.json({
       planId: parseInt(planId),
-      shoppingList: groupedList,
+      shoppingList: groupedList,  // Grouped by aisle
+      byRecipe: byRecipe,         // Grouped by recipe (NEW!)
       totalItems: shoppingList.length
     });
   } catch (err) {
