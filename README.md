@@ -7,7 +7,7 @@ PlatePlan simplifies healthy eating by:
 - Letting users choose their diet preferences
 - Generating a full weekly meal plan using real recipe data
 - Saving ingredients into a relational database
-- Allowing single-meal replacements
+- Allowing users to replace individual meals with a new recipe
 - Automatically generating a full shopping list
 The app is authenticated with session-based login and stores all information per user
 
@@ -80,7 +80,7 @@ Runs at http://localhost:3000/
 Auth
 - POST /api/users/signup
 - POST /api/users/login
-- POST /api.users/logout
+- POST /api/users/logout
 Meal Plans
 - POST /api/mealplan/generate
 - GET /api/mealplan/:userId
@@ -92,10 +92,10 @@ Shopping List
 ## FUTURE IMPROVEMENTS
 - Save multiple weekly plans
 - Individual meal nutrition breakdowns
-- Drag and drop meal reaaranging
+- Drag and drop meal rearanging
 
 ## TEAM MEMBERS
-Matt: Backend Engineer + Database Architect + Full-Stack Integrator
-Marc: Frontend Engineer + UI/UX Developer
-Gabe: API Developer / Backend Route Engineer
+### Matt: Backend Engineer + Database Architect + Full-Stack Integrator
+### Marc: Frontend Engineer + UI/UX Developer
+### Gabe: API Developer / Backend Route Engineer
 
