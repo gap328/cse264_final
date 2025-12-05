@@ -52,27 +52,32 @@ function Dashboard({ user, onLogout }) {
     setLoading(true);
     setError('');
     setSuccess('');
-
+  
     try {
       const response = await fetch('/api/mealplan/generate', {
         method: 'POST',
         credentials: 'include'
       });
-
+  
       const data = await response.json();
-
+  
       if (response.ok) {
-        setMealPlan(data.mealPlan);
+        // The generate route only creates the plan in the DB.
+        // Now fetch the detailed version (with titles/images/calories).
+        await loadMealPlan();
         setSuccess('Meal plan generated successfully!');
       } else {
         setError(data.error || 'Failed to generate meal plan');
       }
     } catch (err) {
+      console.error('Generate meal plan error:', err);
       setError('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
   };
+  
+  
 
   const replaceMeal = async (itemId) => {
     try {

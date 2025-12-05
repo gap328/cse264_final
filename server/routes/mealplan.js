@@ -209,7 +209,7 @@ router.get("/:userId", requireAuth, async (req, res) => {
 
     // Get all meal plan items with recipe details
     const itemsResult = await pool.query(
-      `SELECT mpi.*, r.title, r.image_url, r.calories
+      `SELECT mpi.*, r.title, r.image_url AS image, r.calories
        FROM meal_plan_items mpi
        JOIN recipes r ON mpi.recipe_id = r.recipe_id
        WHERE mpi.plan_id = $1
@@ -226,6 +226,7 @@ router.get("/:userId", requireAuth, async (req, res) => {
          mpi.meal_number`,
       [mealPlan.plan_id]
     );
+    
 
     res.json({
       mealPlan: {
@@ -289,6 +290,8 @@ router.put("/item/:itemId", requireAuth, async (req, res) => {
     const newApiRecipe = data.recipes[0];
 
     // Insert new recipe
+    const calories = Math.round(apiRecipe.nutrition?.nutrients?.[0]?.amount || 0);
+
     const recipeResult = await pool.query(
       `INSERT INTO recipes (title, image_url, source, calories, diet_type)
        VALUES ($1, $2, $3, $4, $5)
@@ -297,7 +300,7 @@ router.put("/item/:itemId", requireAuth, async (req, res) => {
         newApiRecipe.title,
         newApiRecipe.image,
         'spoonacular',
-        newApiRecipe.nutrition?.nutrients?.[0]?.amount || 0,
+        calories,
         prefs.diet_type
       ]
     );

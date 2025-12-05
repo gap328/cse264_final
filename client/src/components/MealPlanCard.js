@@ -23,7 +23,7 @@ function MealPlanCard({ item, onReplace }) {
       <CardMedia
         component="img"
         height="140"
-        image={item.image_url || 'https://via.placeholder.com/300x140?text=No+Image'}
+        image={item.image || item.image_url || 'https://via.placeholder.com/300x140?text=No+Image'}
         alt={item.title}
       />
       <CardContent sx={{ flexGrow: 1 }}>
@@ -46,7 +46,7 @@ function MealPlanCard({ item, onReplace }) {
         </Typography>
         {item.calories > 0 && (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            {item.calories} calories
+            {Math.round(item.calories)} calories
           </Typography>
         )}
       </CardContent>
