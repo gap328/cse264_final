@@ -13,10 +13,14 @@ The app is authenticated with session-based login and stores all information per
 
 ## FEATURES
 ### User Authentication
-- Signup
-- Login
-- Session tracking with express-session
-- Sessions stored in PostgreSQL
+- Login Page
+![Login](screenshots/login.png)
+- Weekly Meal Plan
+![Weekly Meal Plan](screenshots/mealplan.png)
+- Shopping List
+![Shopping List](screenshots/shoppinglist.png)
+- Upgrade Page
+![Upgrade Page](screenshots/upgrade.png)
 
 ### Users Preferences:
 - Diet type
