@@ -11,12 +11,14 @@ import {
   Alert,
   CircularProgress,
   Paper,
-  Grid
+  Grid,
+  Chip
 } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsIcon from '@mui/icons-material/Settings';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
+import StarIcon from '@mui/icons-material/Star';
 
 import MealPlanCard from '../components/MealPlanCard';
 import ShoppingList from '../components/ShoppingList';
@@ -27,11 +29,27 @@ function Dashboard({ user, onLogout }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showShoppingList, setShowShoppingList] = useState(false);
+  const [subscription, setSubscription] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     loadMealPlan();
+    loadSubscription();
   }, [user.user_id]);
+
+  const loadSubscription = async () => {
+    try {
+      const response = await fetch('/api/users/subscription', {
+        credentials: 'include'
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSubscription(data);
+      }
+    } catch (err) {
+      console.error('Failed to load subscription:', err);
+    }
+  };
 
   const loadMealPlan = async () => {
     try {
@@ -62,12 +80,27 @@ function Dashboard({ user, onLogout }) {
       const data = await response.json();
   
       if (response.ok) {
-        // The generate route only creates the plan in the DB.
-        // Now fetch the detailed version (with titles/images/calories).
         await loadMealPlan();
         setSuccess('Meal plan generated successfully!');
       } else {
-        setError(data.error || 'Failed to generate meal plan');
+        if (data.upgradeRequired) {
+          setError(
+            <Box>
+              {data.error}{' '}
+              <Button 
+                variant="outlined" 
+                size="small" 
+                color="secondary"
+                onClick={() => navigate('/upgrade')}
+                sx={{ ml: 1 }}
+              >
+                Upgrade Now
+              </Button>
+            </Box>
+          );
+        } else {
+          setError(data.error || 'Failed to generate meal plan');
+        }
       }
     } catch (err) {
       console.error('Generate meal plan error:', err);
@@ -76,8 +109,6 @@ function Dashboard({ user, onLogout }) {
       setLoading(false);
     }
   };
-  
-  
 
   const replaceMeal = async (itemId) => {
     try {
@@ -124,15 +155,24 @@ function Dashboard({ user, onLogout }) {
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Smart Recipe Meal Planner
           </Typography>
-          <Typography variant="body1" sx={{ mr: 2 }}>
-            {user.email}
-          </Typography>
-          <IconButton color="inherit" onClick={() => navigate('/preferences')}>
-            <SettingsIcon />
-          </IconButton>
-          <IconButton color="inherit" onClick={onLogout}>
-            <LogoutIcon />
-          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {subscription && (
+              <Chip 
+                label={subscription.subscriptionTier.toUpperCase()} 
+                color={subscription.isPaid ? "success" : "default"}
+                size="small"
+                onClick={() => navigate('/upgrade')}
+                sx={{ cursor: 'pointer' }}
+              />
+            )}
+            <Typography variant="body1">{user.email}</Typography>
+            <IconButton color="inherit" onClick={() => navigate('/preferences')}>
+              <SettingsIcon />
+            </IconButton>
+            <IconButton color="inherit" onClick={onLogout}>
+              <LogoutIcon />
+            </IconButton>
+          </Box>
         </Toolbar>
       </AppBar>
 
@@ -149,25 +189,36 @@ function Dashboard({ user, onLogout }) {
           </Alert>
         )}
 
-        <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
-          <Button
-            variant="contained"
-            onClick={generateMealPlan}
-            disabled={loading}
-            startIcon={loading ? <CircularProgress size={20} /> : <RefreshIcon />}
-          >
-            {mealPlan ? 'Regenerate Meal Plan' : 'Generate Meal Plan'}
-          </Button>
-
-          {mealPlan && (
+        <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', gap: 2 }}>
             <Button
-              variant="outlined"
-              onClick={() => setShowShoppingList(!showShoppingList)}
-              startIcon={<ShoppingCartIcon />}
+              variant="contained"
+              onClick={generateMealPlan}
+              disabled={loading}
+              startIcon={loading ? <CircularProgress size={20} /> : <RefreshIcon />}
             >
-              {showShoppingList ? 'Hide' : 'Show'} Shopping List
+              {mealPlan ? 'Regenerate Meal Plan' : 'Generate Meal Plan'}
             </Button>
-          )}
+
+            {mealPlan && (
+              <Button
+                variant="outlined"
+                onClick={() => setShowShoppingList(!showShoppingList)}
+                startIcon={<ShoppingCartIcon />}
+              >
+                {showShoppingList ? 'Hide' : 'Show'} Shopping List
+              </Button>
+            )}
+          </Box>
+
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={() => navigate('/upgrade')}
+            startIcon={<StarIcon />}
+          >
+            Upgrade Plan
+          </Button>
         </Box>
 
         {showShoppingList && mealPlan && (

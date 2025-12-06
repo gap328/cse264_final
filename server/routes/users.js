@@ -5,7 +5,7 @@ import pool from "../db.js";
 
 const router = express.Router();
 
-// Middleware to check if user is logged in
+// make sure theyre logged in
 const requireAuth = (req, res, next) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: 'Not authenticated' });
@@ -22,7 +22,7 @@ router.post("/signup", async (req, res) => {
   }
 
   try {
-    // Check if user already exists
+    // check if already signed up
     const existingUser = await pool.query(
       "SELECT * FROM users WHERE email = $1",
       [email]
@@ -32,10 +32,10 @@ router.post("/signup", async (req, res) => {
       return res.status(400).json({ error: 'User already exists' });
     }
 
-    // Hash password
+    // hash the password so we dont store it plain
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Insert new user with default free tier
+    // new users start on free tier
     const result = await pool.query(
       "INSERT INTO users (email, password_hash, role, subscription_tier) VALUES ($1, $2, $3, $4) RETURNING user_id, email, role, subscription_tier",
       [email, hashedPassword, 'free', 'free']
@@ -43,7 +43,7 @@ router.post("/signup", async (req, res) => {
 
     const newUser = result.rows[0];
 
-    // Set session
+    // log them in right away
     req.session.userId = newUser.user_id;
 
     res.status(201).json({
@@ -227,16 +227,20 @@ router.get("/subscription", requireAuth, async (req, res) => {
 
 // UPGRADE TO PREMIUM (Simulated payment)
 router.post("/upgrade", requireAuth, async (req, res) => {
-  const { tier } = req.body; // 'premium' or 'pro'
+  const { tier } = req.body; // free premium or pro
 
-  if (!['premium', 'pro'].includes(tier)) {
+  if (!['free', 'premium', 'pro'].includes(tier)) {
     return res.status(400).json({ error: 'Invalid subscription tier' });
   }
 
   try {
-    // In production, you'd integrate with Stripe/PayPal here
-    const expiresAt = new Date();
-    expiresAt.setMonth(expiresAt.getMonth() + 1); // 1 month subscription
+    let expiresAt = null;
+    
+    // paid tiers expire after a month
+    if (tier !== 'free') {
+      expiresAt = new Date();
+      expiresAt.setMonth(expiresAt.getMonth() + 1);
+    }
 
     const result = await pool.query(
       `UPDATE users 
@@ -247,52 +251,12 @@ router.post("/upgrade", requireAuth, async (req, res) => {
     );
 
     res.json({
-      message: 'Subscription upgraded successfully!',
+      message: tier === 'free' ? 'Downgraded to Free successfully!' : 'Subscription upgraded successfully!',
       user: result.rows[0]
     });
   } catch (err) {
     console.error("Upgrade error:", err);
-    res.status(500).json({ error: "Failed to upgrade subscription" });
-  }
-});
-
-// ADMIN: Set user role (admin only)
-router.put("/admin/setrole/:userId", requireAuth, async (req, res) => {
-  const { userId } = req.params;
-  const { role } = req.body; // 'free', 'premium', 'admin'
-
-  if (!['free', 'premium', 'pro', 'admin'].includes(role)) {
-    return res.status(400).json({ error: 'Invalid role' });
-  }
-
-  try {
-    // Check if current user is admin
-    const adminCheck = await pool.query(
-      "SELECT role FROM users WHERE user_id = $1",
-      [req.session.userId]
-    );
-
-    if (adminCheck.rows.length === 0 || adminCheck.rows[0].role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
-    // Update target user's role
-    const result = await pool.query(
-      "UPDATE users SET role = $1 WHERE user_id = $2 RETURNING user_id, email, role, subscription_tier",
-      [role, userId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json({
-      message: 'User role updated',
-      user: result.rows[0]
-    });
-  } catch (err) {
-    console.error("Set role error:", err);
-    res.status(500).json({ error: "Failed to update role" });
+    res.status(500).json({ error: "Failed to update subscription" });
   }
 });
 

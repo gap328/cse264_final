@@ -1,13 +1,14 @@
 // server/routes/mealplan.js
 import express from "express";
 import pool from "../db.js";
+import { checkSubscription } from '../subscription.js';
 
 const router = express.Router();
 
 const SPOONACULAR_API_KEY = process.env.SPOONACULAR_API_KEY;
 const SPOONACULAR_BASE_URL = 'https://api.spoonacular.com/recipes';
 
-// Middleware
+// make sure theyre logged in
 const requireAuth = (req, res, next) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: 'Not authenticated' });
@@ -16,11 +17,26 @@ const requireAuth = (req, res, next) => {
 };
 
 // GENERATE A WEEKLY MEAL PLAN
-router.post("/generate", requireAuth, async (req, res) => {
+router.post("/generate", requireAuth, checkSubscription, async (req, res) => {
   const userId = req.session.userId;
 
   try {
-    // Get user preferences
+    // see if they hit their plan limit
+    if (req.tierLimits.maxMealPlans !== -1) {
+      const planCount = await pool.query(
+        "SELECT COUNT(*) FROM meal_plans WHERE user_id = $1",
+        [userId]
+      );
+
+      if (parseInt(planCount.rows[0].count) >= req.tierLimits.maxMealPlans) {
+        return res.status(403).json({ 
+          error: `Your ${req.subscriptionTier} tier is limited to ${req.tierLimits.maxMealPlans} meal plans. Upgrade for more!`,
+          upgradeRequired: true
+        });
+      }
+    }
+
+    // grab their food preferences
     const prefsResult = await pool.query(
       "SELECT * FROM preferences WHERE user_id = $1",
       [userId]
@@ -31,29 +47,40 @@ router.post("/generate", requireAuth, async (req, res) => {
     }
 
     const prefs = prefsResult.rows[0];
-    const mealsPerDay = prefs.meals_per_day || 3;
-    const totalMeals = 7 * mealsPerDay; // 7 days
+    let mealsPerDay = prefs.meals_per_day || 3;
 
-   const params = new URLSearchParams({
-  apiKey: SPOONACULAR_API_KEY,
-  number: totalMeals,
-  addRecipeInformation: true,
-  fillIngredients: true
-});
+    // make sure they cant pick too many meals per day
+    const maxMealsPerDay = Math.floor(req.tierLimits.mealsPerPlan / 7);
+    if (mealsPerDay > maxMealsPerDay) {
+      return res.status(403).json({
+        error: `Your ${req.subscriptionTier} tier allows up to ${maxMealsPerDay} meals per day. Upgrade for more!`,
+        upgradeRequired: true
+      });
+    }
 
-if (prefs.diet_type) params.append('diet', prefs.diet_type);
-if (prefs.allergies) params.append('intolerances', prefs.allergies);
+    const totalMeals = 7 * mealsPerDay;
 
-// Add calorie filtering with range
-if (prefs.calorie_target) {
-  const target = parseInt(prefs.calorie_target);
-  const mealsPerDay = prefs.meals_per_day || 3;
-  const caloriesPerMeal = Math.floor(target / mealsPerDay);
-  
-  // Set range: +/- 200 calories per meal
-  params.append('minCalories', Math.max(0, caloriesPerMeal - 200));
-  params.append('maxCalories', caloriesPerMeal + 200);
-}
+    // build the spoonacular api url
+    const params = new URLSearchParams({
+      apiKey: SPOONACULAR_API_KEY,
+      number: totalMeals,
+      addRecipeInformation: true,
+      fillIngredients: true
+    });
+
+    if (prefs.diet_type) params.append('diet', prefs.diet_type);
+    if (prefs.allergies) params.append('intolerances', prefs.allergies);
+
+    // filter by calories if they set a target
+    if (prefs.calorie_target) {
+      const target = parseInt(prefs.calorie_target);
+      const caloriesPerMeal = Math.floor(target / mealsPerDay);
+      
+      // give some wiggle room on calories
+      params.append('minCalories', Math.max(0, caloriesPerMeal - 200));
+      params.append('maxCalories', caloriesPerMeal + 200);
+    }
+
     const response = await fetch(`${SPOONACULAR_BASE_URL}/complexSearch?${params}`);
     
     if (!response.ok) {
@@ -102,7 +129,7 @@ if (prefs.calorie_target) {
 
         const recipeId = recipeResult.rows[0].recipe_id;
 
-        // Fetch full recipe details with ingredients from Spoonacular
+        // grab the full recipe details so we can store ingredients
         try {
           const detailsParams = new URLSearchParams({
             apiKey: SPOONACULAR_API_KEY,
@@ -116,11 +143,11 @@ if (prefs.calorie_target) {
           if (detailsResponse.ok) {
             const recipeDetails = await detailsResponse.json();
 
-            // Store ingredients
+            // save all the ingredients for this recipe
             if (recipeDetails.extendedIngredients && recipeDetails.extendedIngredients.length > 0) {
               for (const ing of recipeDetails.extendedIngredients) {
                 try {
-                  // Insert ingredient if not exists
+                  // add ingredient to our database
                   const ingResult = await pool.query(
                     `INSERT INTO ingredients (name, category) 
                      VALUES ($1, $2) 
@@ -131,7 +158,7 @@ if (prefs.calorie_target) {
 
                   let ingredientId = ingResult.rows[0]?.ingredient_id;
                   
-                  // If conflict, get existing ingredient_id
+                  // if it already existed grab its id
                   if (!ingredientId) {
                     const existing = await pool.query(
                       `SELECT ingredient_id FROM ingredients WHERE name = $1`,
@@ -140,7 +167,7 @@ if (prefs.calorie_target) {
                     ingredientId = existing.rows[0]?.ingredient_id;
                   }
 
-                  // Link to recipe
+                  // link this ingredient to the recipe
                   if (ingredientId) {
                     await pool.query(
                       `INSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount, unit)
@@ -209,7 +236,7 @@ router.get("/:userId", requireAuth, async (req, res) => {
 
     // Get all meal plan items with recipe details
     const itemsResult = await pool.query(
-      `SELECT mpi.*, r.title, r.image_url AS image, r.calories
+      `SELECT mpi.*, r.title, r.image_url, r.calories
        FROM meal_plan_items mpi
        JOIN recipes r ON mpi.recipe_id = r.recipe_id
        WHERE mpi.plan_id = $1
@@ -226,7 +253,6 @@ router.get("/:userId", requireAuth, async (req, res) => {
          mpi.meal_number`,
       [mealPlan.plan_id]
     );
-    
 
     res.json({
       mealPlan: {
@@ -290,8 +316,6 @@ router.put("/item/:itemId", requireAuth, async (req, res) => {
     const newApiRecipe = data.recipes[0];
 
     // Insert new recipe
-    const calories = Math.round(apiRecipe.nutrition?.nutrients?.[0]?.amount || 0);
-
     const recipeResult = await pool.query(
       `INSERT INTO recipes (title, image_url, source, calories, diet_type)
        VALUES ($1, $2, $3, $4, $5)
@@ -300,7 +324,7 @@ router.put("/item/:itemId", requireAuth, async (req, res) => {
         newApiRecipe.title,
         newApiRecipe.image,
         'spoonacular',
-        calories,
+        newApiRecipe.nutrition?.nutrients?.[0]?.amount || 0,
         prefs.diet_type
       ]
     );

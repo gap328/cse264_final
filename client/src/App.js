@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
 import Preferences from "./pages/Preferences";
+import Upgrade from './pages/Upgrade';
 
 const theme = createTheme({
   palette: {
@@ -58,6 +59,7 @@ function App() {
           <Route path="/signup" element={user ? <Navigate to="/dashboard" /> : <Signup onLogin={handleLogin} />} />
           <Route path="/dashboard" element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
           <Route path="/preferences" element={user ? <Preferences user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
+          <Route path="/upgrade" element={user ? <Upgrade /> : <Navigate to="/login" />} />
           <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} />} />
         </Routes>
       </Router>
